@@ -1,0 +1,15 @@
+scipy
+scikit-image
+cmake
+dlib
+numpy
+face_recognition
+pandas
+xlrd
+opencv-python
+xlsxwriter
+openpyxl
+requests
+threaded
+tkfilebrowser
+pywin32
