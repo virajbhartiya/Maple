@@ -1,0 +1,13 @@
+cmake
+dlib
+opencv-contrib-python
+face_recognition
+numpy
+pandas
+xlrd
+xlsxwriter
+openpyxl
+requests
+threaded
+tkfilebrowser
+imutils

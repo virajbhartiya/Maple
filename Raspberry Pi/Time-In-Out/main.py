@@ -1,0 +1,404 @@
+from picamera.array import PiRGBArray
+from picamera import PiCamera
+import face_recognition
+import cv2
+import numpy as np
+import os
+import pandas as pd
+import time
+import sys
+import datetime
+import requests
+import threading
+import ctypes
+import imutils
+import urllib.request
+import datetime as dt
+from imutils.video import VideoStream
+from openpyxl import load_workbook
+from printing import *
+from db_maker import *
+
+try:
+    import tkinter as tk
+    import tkinter.ttk as ttk
+    from tkinter import filedialog
+except ImportError:
+    import Tkinter as tk
+    import ttk
+    import tkFileDialog as filedialog
+from tkfilebrowser import askopendirname, askopenfilenames, asksaveasfilename
+
+
+class Main:
+
+    # Initialize some variables
+    known_face_encodings = []
+    known_face_roll_no = []
+    face_locations = []
+    face_encodings = []
+    face_names = []
+    process_this_frame = True
+    attendance_record = set([])
+    roll_record = {}
+
+    # Rows in log file
+    name_col = []
+    roll_no_col = []
+    timeIn_col = []
+
+    timeOut_atte = set([])
+    timeOut_col = []
+    timeOutRoll_col = []
+    timeOutName_col = []
+    timeOut_face = []
+
+    # for updating
+    refreshAt = "00"
+    updateAfter = 0
+    timeOut_updateAfter = 0
+    n = 2
+    path = ""
+
+    URL = 'https://script.google.com/macros/s/AKfycby1aUeweMrBsOCbYKeumsMpT7gesBMYpPjY5bK9ykQOtGuKwI1TI2Nz2oGmZ9a9dTT7/exec?'
+
+    def __init__(self):
+        os.system('clear')
+        pass
+
+    def connect(self):
+        try:
+            urllib.request.urlopen('http://google.com') #Python 3.x
+            return True
+        except:
+            return False
+
+    def verify(self, key):
+        value = requests.get(
+           sellf.URL+"num="+key).text
+        if value == "\"Success\"":
+            product = open("product.config", "w+")
+            product.write(value)
+        return value[value.index("\"")+1:value.rindex("\"")]
+
+    def writeConfig(self):
+
+        data = []
+        data.append(input("At what time to refresh? (in 24hr format): ")+"\n")
+        data.append(input(
+            "After how many recongnitions do you want to update excel sheet? (Number): ")+"\n")
+        print("Please selece a Directory where Photoes are saved")
+        data.append(filedialog.askdirectory()+"\n")
+
+        config = open("config.config", "w+")
+
+        try:
+            config.truncate(0)
+        except:
+            pass
+
+        for i in range(len(data)):
+            config.write(data[i])
+        config.close()
+        dbMaker(data[2][:data[2].index("\n")])
+        self.path = data[2][:data[2].index("\n")]
+        os.remove(self.path+'/people_db.xlsx')
+
+    def readConfig(self):
+        with open('config.config', 'r') as reader:
+            data = reader.readlines()
+            self.refreshAt = data[0]
+            self.n = int(data[1])
+            dbMaker(data[2][:data[2].index("\n")])
+            self.path = data[2][:data[2].index("\n")]
+
+    def strToBoolean(self, val):
+        if val == "y" or val == "Y":
+            return True
+        elif val == "n" or val == "N":
+            return False
+
+    def updateDatabase(self):
+        seperator = ","
+        names = seperator.join(self.name_col)
+        roll = seperator.join(str(self.roll_no_col))
+        time = seperator.join(self.timeIn_col)
+        d = dt.datetime.now()
+        d = d.strftime("%d")
+        resp = requests.get(
+            self.URL+'key=update&inout=0&names='+names+'&roll='+roll+'&time='+time+'&date='+d).text
+        if(resp != None):
+            self.updateAfter = 0
+            pass
+
+    def timeOut_updateDatabase(self):
+        seperator = ","
+        names = seperator.join(self.timeOutName_col)
+        roll = seperator.join(str(self.timeOutRoll_col))
+        time = seperator.join(self.timeOut_col)
+        d = dt.datetime.now()
+        d = d.strftime("%d")
+        resp = requests.get(
+            self.URL+'key=update&inout=1&names='+names+'&roll='+roll+'&time='+time+'&date='+d).text
+        if(resp != None):
+            self.updateAfter = 0
+            pass
+
+    def progressing(self):
+        items = list(range(0, 67))
+        for _ in progressBar(items, prefix='Progress:', suffix='Complete', length=50):
+            time.sleep(0.1)
+
+    def main(self):
+        welcomeToFaceIt()
+        logo()
+        time.sleep(0.5)
+        verified = False
+        try:
+            valu = ""
+            with open('./product.config', 'r') as reader:
+                data = reader.readlines()
+                val = data[0]
+                if val != "\"Success\"":
+                    key = input("Please enter your product Key: ")
+                    valu = "Success"
+                else:
+                    valu = "Success"
+            if valu == "Success":
+                verified = True
+            elif valu == "Product Key in use":
+                productKeyInUse()
+                print()
+                print("For reactivation Please contact: +91 84858 37871")
+            elif valu == "Not found":
+                invalidKey()
+                verified = False
+
+        except KeyboardInterrupt:
+            pass
+        except:
+            key = input("Please enter your product Key: ")
+            val = self.verify(key)
+            if val == "Success":
+                verified = True
+
+        if verified:
+            try:
+                config = open('./config.config')
+		
+#                readOrWrite = input(
+#                    "Do u want to use previous cofigurations?(Y or N): ")
+#                if readOrWrite == "Y" or readOrWrite == "y":
+#                    self.readConfig()
+#                else:
+#                    self.writeConfig()
+		
+                self.readConfig()
+                creatingDatabase()
+            except KeyboardInterrupt:
+                close()
+                os._exit(1)
+                pass
+
+            except:
+                self.writeConfig()
+                creatingDatabase()
+
+            df = pd.read_excel(self.path + "/output.xlsx")
+            for _, row in df.iterrows():
+                self.roll_no = row['Roll No']
+                self.name = row['Name']
+                self.image_path = row['Image']
+                self.roll_record[self.roll_no] = self.name
+                student_image = face_recognition.load_image_file(
+                    self.path + '/' + self.image_path)
+                student_face_encoding = face_recognition.face_encodings(student_image)[
+                    0]
+                self.known_face_encodings.append(student_face_encoding)
+                self.known_face_roll_no.append(self.roll_no)
+
+            # Get a reference to webcam #0 (the default one)
+#            video_capture = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+            # A Nicer, Single-Call Usage
+            #video_capture = PiCamera()
+            #video_capture.resolution = (640,480)
+            #video_capture.framerate = 32
+            #rawCapture = PiRGBArray(video_capture,size=(640,480))
+            vs = VideoStream(usePiCamera=True).start()
+            time.sleep(0.1)
+            print('-' * 75)
+#            print(video_capture.isOpened())
+            print('{:<15s}{:<15s}{:<15s}{:<15s}{:<15s}'.format(
+                "Sr. No.", "Names", "Roll No.", "Time","Status"))
+            print('-' * 75)
+            try:
+
+                while True:
+                    # Grab a single frame of video
+                    #_, frame = video_capture.read()
+                    #small_frame = video_capture.capture(rawCapture, format="bgr")
+                    # time.sleep(3)
+                    # Resize frame of video to 1/4 size for faster face recognition processing
+                    frame = vs.read()
+                    frame = imutils.resize(frame, width=700, height=700)
+                    #cv2.imshow("image",frame)
+                   # print(frame.shape)
+                    #small_frame = cv2.resize(frame, (0, 0), fx=1, fy=1)
+
+                    #small_frame = rawCapture
+
+                    # Convert the image from BGR color (which OpenCV uses) to RGB color (which face_recognition uses)
+                    #rgb_small_frame = small_frame[:, :, ::-1]
+                    #rgb_small_frame = small_frame
+                    # Only process every other frame of video to save time
+                    if self.process_this_frame:
+
+                        #============================================
+                        #This block Refreshes everything for new day
+                        curr_time = time.localtime()
+                        curr_clock = time.strftime("%H:%M:%S", curr_time)
+                        start = "00:00:00"
+                        end = curr_clock
+                        start_dt = dt.datetime.strptime(start, '%H:%M:%S')
+                        end_dt = dt.datetime.strptime(end, '%H:%M:%S')
+                        diff = (end_dt - start_dt) 
+                        diff = diff.seconds/60
+                        
+                        
+                        
+                        if diff<0.2:
+                            dbMaker(self.path)
+                            self.updateDatabase()
+                            self.timeOut_updateDatabase()
+                            
+                            #print("Refreshing")
+                            self.attendence_record= set([])
+                            self.name_col = []
+                            self.roll_no_col = []
+                            self.timeIn_col = []
+                            
+                            self.timeOut_atte = set([])
+                            self.timeOut_col = []
+                            self.timeOutRoll_col = []
+                            self.timeOutName_col = []
+                            self.timeOut_face = []
+                        #============================================================
+                        # Find all the faces and face encodings in the current frame of video
+                        self.face_locations = face_recognition.face_locations(
+                            frame)
+                        self.face_encodings = face_recognition.face_encodings(
+                            frame, self.face_locations)
+
+                        # print(str(curr_clock[3:5]))
+                        # print(curr_clock)
+                        self.face_names = []
+                        for face_encoding in self.face_encodings:
+                            # See if the face is a match for the known face(s)
+                            matches = face_recognition.compare_faces(
+                                self.known_face_encodings, face_encoding, tolerance=0.6)
+                            name = "Who u?"
+
+                            # Or instead, use the known face with the smallest distance to the new face
+                            face_distances = face_recognition.face_distance(
+                                self.known_face_encodings, face_encoding)
+                            best_match_index = np.argmin(face_distances)
+                            
+                            if matches[best_match_index]:
+                                roll_no = self.known_face_roll_no[best_match_index]
+                                # add this to the log
+                                name = self.roll_record[roll_no]
+                                if roll_no not in self.attendance_record:
+                                    self.attendance_record.add(roll_no)
+                                    print('{:<15d}{:<15s}{:<15d}{:<15s}{:<15s}'.format(
+                                        len(self.name_col)+1+len(self.timeOutName_col), name, roll_no, curr_clock, "Log In"))
+                                    # print('[+] ',name, roll_no, curr_clock)
+
+                                    self.name_col.append(name)
+                                    self.roll_no_col.append(roll_no)
+                                    self.timeIn_col.append(curr_clock)
+
+                                    if self.connect():
+                                        self.updateAfter = 0
+                                        thread = threading.Thread(target=self.updateDatabase)
+                                        thread.start()
+                                                                        
+                            #self.face_names.append(name)
+
+                            #if matches[best_match_index]:
+                            if matches[best_match_index]:
+                                roll_no = self.known_face_roll_no[best_match_index]                                
+                                start = self.timeIn_col[self.name_col.index(name)]
+                                end = curr_clock
+                                start_dt = dt.datetime.strptime(start, '%H:%M:%S')
+                                end_dt = dt.datetime.strptime(end, '%H:%M:%S')
+                                diff = (end_dt - start_dt) 
+                                diff = diff.seconds/60
+                                
+                                if diff > 0.6:
+                                    if roll_no not in self.timeOut_atte:
+                                        self.timeOut_atte.add(roll_no)
+                                        print('{:<15d}{:<15s}{:<15d}{:<15s}{:<15s}'.format(
+                                            len(self.timeOutName_col)+1+len(self.name_col), name, roll_no, curr_clock, "Log Out"))
+    
+                                        self.timeOutName_col.append(name)
+                                        self.timeOutRoll_col.append(roll_no)
+                                        self.timeOut_col.append(curr_clock)
+                                        if self.connect():
+                                            thread = threading.Thread(target=self.timeOut_updateDatabase)
+                                            thread.start()
+                                            self.timeOut_updateAfter = self.timeOut_updateAfter+1
+                                        if curr_clock.startswith(self.refreshAt):
+                                            thread = threading.Thread(
+                                                target=self.updateDatabase_timeOut)
+                                            thread.start()
+                                            print("Refreshing")
+                                            self.timeOutNname_col = []
+                                            self.timeOutRoll_col = []
+                                            self.timeOut_col = []
+                                self.timeOut_face.append(name)
+                            self.face_names.append(name)
+
+                    self.process_this_frame = not self.process_this_frame
+
+                    """
+                    # Display the results
+
+                    for (top, right, bottom, left), name in zip(self.face_locations, self.face_names):
+#
+                        # Draw a box around the face
+                        cv2.rectangle(frame, (left, top),
+                                    (right, bottom), (245, 214, 18), 2)
+
+                        # Draw a label with a name below the face
+                        cv2.rectangle(frame, (left, bottom - 35),
+                                    (right, bottom), (245, 214, 18), cv2.FILLED)
+                        font = cv2.FONT_HERSHEY_DUPLEX
+                        cv2.putText(frame, name, (left + 6, bottom - 6),
+                                   font, 1.0, (255, 255, 255), 1)
+#                    Display the resulting image
+                    cv2.imshow('Webcam', frame)
+"""
+                    # Hit 'q' on the keyboard to quit!
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        close()
+                        break
+            except KeyboardInterrupt:
+                close()
+                self.updateDatabase()
+            # self.updateExcel()
+            self.updateDatabase()
+            self.timeOut_updateDatabase()
+            vs.stop()
+            cv2.destroyAllWindows()
+
+        else:
+            print("Software Not activated... Try Again or contact: +91 84858 37871")
+
+
+app = Main()
+try:
+    app.main()
+except KeyboardInterrupt:
+    close()
+    app.updateDatabase()
+    os._exit(1)
