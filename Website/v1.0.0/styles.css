@@ -125,13 +125,13 @@ a:hover {
 }
 
 .main__container h1 {
-    font-size: 110px;
+    font-size: 90px;
     color: black;
     -webkit-text-fill-color: transparent;
     /* Will override color (regardless of order) */
     -webkit-text-stroke-width: 2px;
     -webkit-text-stroke-color: #fff;
-    margin-bottom: 32px;
+    margin-bottom: 20px;
 }
 
 .main__content {
@@ -145,8 +145,8 @@ a:hover {
 }
 
 .main__text h2 {
-    font-size: 48px;
-    line-height: 1.5;
+    font-size: 40px;
+    line-height: 1.2;
     margin-bottom: 32px;
 }
 
