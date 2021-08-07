@@ -53,7 +53,7 @@ def createSheet(names, roll):
     seperator.join(names)
     seperator.join(roll)
     update = requests.get(
-        f'https://script.google.com/macros/s/AKfycby1aUeweMrBsOCbYKeumsMpT7gesBMYpPjY5bK9ykQOtGuKwI1TI2Nz2oGmZ9a9dTT7/exec?key=create&names={names}&roll={roll}').text
+        f'https://script.google.com/macros/s/AKfycbx6QqeHusypbgbQclo39C_XsN7OfS0Jqv6nYEnEO3SfWWPQ68LevrnSVARHoJosHJ9ZZw/exec?key=create&names={names}&roll={roll}').text
         
     if update == 'Fail':
         close()
